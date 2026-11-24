@@ -90,8 +90,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.ref }}
+      - name: Install ARM cross-gcc + qemu-user
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi qemu-user-static
       - name: Host / x86 tests
         run: make check
+      - name: fw ARM tests under QEMU (boot model + v90nv.arm)
+        # The Python-heavy boot model -- including test_model_is_enforced, the
+        # HT801 model-enforcement test -- runs far faster here under qemu than
+        # natively on the Pi's A72. Only v90nv.arm is actually ARM, and apt's
+        # cross-gcc builds that static tool; the pinned toolchain is needed only
+        # for the kernel/loader, which this target does not build. CROSS= and
+        # QEMU= on the command line override the Makefile and propagate to the
+        # loader sub-make. (The compiled ARM test *programs* run on the Pi, in
+        # the 'arm' job's `make check-arm`.)
+        run: make -C fw test-v90nv CROSS=arm-linux-gnueabi- QEMU=qemu-arm-static
 
   # ---- ARM-native tests on a throwaway Mythic Beasts Pi 4 --------------------
   # This job runs in the cloud and *drives* the Pi over SSH; the Pi is never a
