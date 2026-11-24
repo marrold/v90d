@@ -1,19 +1,22 @@
-name: arm-tests
+name: tests
 
-# Two ways to start a run, both restricted to people with write access:
+# Start a run, two ways, both restricted to people with write access:
 #
-#   1. Manually:  Actions -> arm-tests -> Run workflow  (or, with gh:
-#        gh workflow run arm-tests.yml -f test_ref=my-feature )
+#   1. Manually:  Actions -> tests -> Run workflow, choose the branch in
+#      test_ref and a scope (default: all).  (with gh:
+#        gh workflow run tests.yml -f test_ref=my-feature -f scope=all )
 #
-#   2. By commenting  /arm-check  on a pull request IN THIS REPO. Only a
-#      comment from an OWNER/MEMBER/COLLABORATOR triggers it, so no outsider
-#      can start a run (and GitHub never hands secrets to fork-PR events).
-#      It tests the PR's head branch and reports back on the PR with a comment
-#      and an "arm-check" commit status you can require in branch protection.
-#      (This works on PRs in THIS fork, not on the upstream PR.)
+#   2. By commenting on a pull request IN THIS REPO:
+#        /test              run everything against the PR's head branch
+#        /test host         only `make check`              (x86)
+#        /test fw           only the fw boot model         (x86, qemu)
+#        /test arm          only `make check-arm`          (Pi, native)
+#      Only a comment from an OWNER/MEMBER/COLLABORATOR triggers it. It reports
+#      back with a comment and a "tests" commit status you can require in
+#      branch protection. (Works on PRs in THIS fork, not the upstream PR.)
 #
-# The one rule: only ever run it against code you trust (your own branches /
-# your own PRs) -- the job compiles and runs the checked-out ref.
+# The one rule: only run it against code you trust (your own branches/PRs) --
+# the jobs compile and run the checked-out ref.
 #
 # Secrets required (Settings -> Secrets and variables -> Actions):
 #   MB_KEY_ID   Mythic Beasts API key id      (control panel -> API users)
@@ -28,63 +31,105 @@ on:
       test_ref:
         description: Branch or SHA to test
         required: true
+      scope:
+        description: What to run
+        type: choice
+        options: [all, host, fw, arm]
+        default: all
   issue_comment:
     types: [created]
 
 permissions:
   contents: read
   pull-requests: write   # post the result comment
-  statuses: write        # post the arm-check commit status
+  statuses: write        # post the "tests" commit status
 
 env:
   API: https://api.mythic-beasts.com/beta
 
 jobs:
-  # ---- decide whether to run, and what ref to test --------------------------
+  # ---- decide whether to run, what ref, and which suites --------------------
   resolve:
     runs-on: ubuntu-latest
-    # dispatch by a write-access user, OR a "/arm-check" comment on a PR here
-    # from someone with write access. author_association is the commenter's,
-    # so only comment /arm-check on PRs whose code you trust.
+    # dispatch by a write-access user, OR a "/test" comment on a PR here from
+    # someone with write access. author_association is the commenter's, so only
+    # /test PRs whose code you trust.
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
-       startsWith(github.event.comment.body, '/arm-check') &&
+       startsWith(github.event.comment.body, '/test') &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     outputs:
-      ref: ${{ steps.r.outputs.ref }}
-      sha: ${{ steps.r.outputs.sha }}
-      pr:  ${{ steps.r.outputs.pr }}
+      ref:   ${{ steps.r.outputs.ref }}
+      sha:   ${{ steps.r.outputs.sha }}
+      pr:    ${{ steps.r.outputs.pr }}
+      scope: ${{ steps.r.outputs.scope }}
     steps:
-      - name: Resolve ref (dispatch input or PR head)
+      - name: Resolve ref + scope
         id: r
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          IN_REF: ${{ inputs.test_ref }}
+          IN_SCOPE: ${{ inputs.scope }}
+          PR_NUM: ${{ github.event.issue.number }}
+          BODY: ${{ github.event.comment.body }}   # via env, never inline (injection)
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
-            printf 'ref=%s\nsha=\npr=\n' "${{ inputs.test_ref }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = workflow_dispatch ]; then
+            ref="$IN_REF"; sha=""; pr=""; sel="${IN_SCOPE:-all}"
           else
-            pr='${{ github.event.issue.number }}'
+            pr="$PR_NUM"
             info=$(gh pr view "$pr" -R "$REPO" --json headRefName,headRefOid)
-            printf 'ref=%s\nsha=%s\npr=%s\n' \
-              "$(printf '%s' "$info" | jq -r .headRefName)" \
-              "$(printf '%s' "$info" | jq -r .headRefOid)" \
-              "$pr" >> "$GITHUB_OUTPUT"
+            ref=$(printf '%s' "$info" | jq -r .headRefName)
+            sha=$(printf '%s' "$info" | jq -r .headRefOid)
+            # second whitespace-separated token of the comment ("" if none)
+            set -- $BODY
+            sel="${2:-}"
           fi
+          case "$sel" in
+            ""|all)              scope=all  ;;
+            host|x86|check)      scope=host ;;
+            fw|boot)             scope=fw   ;;
+            arm|arm-check|check-arm) scope=arm ;;
+            *)
+              if [ -n "${pr:-}" ]; then
+                gh pr comment "$pr" -R "$REPO" --body \
+                  "❓ unknown selector \`$sel\`. Use: \`/test\` (all), \`/test host\`, \`/test fw\`, or \`/test arm\`."
+              fi
+              echo "unknown selector: $sel" >&2; exit 1 ;;
+          esac
+          printf 'ref=%s\nsha=%s\npr=%s\nscope=%s\n' "$ref" "$sha" "$pr" "$scope" >> "$GITHUB_OUTPUT"
       - name: Acknowledge on the PR
         if: steps.r.outputs.pr != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr comment "${{ steps.r.outputs.pr }}" -R "${{ github.repository }}" \
-            --body "⏳ ARM tests started on \`${{ steps.r.outputs.ref }}\` — [watch the run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            --body "⏳ tests started (scope: \`${{ steps.r.outputs.scope }}\`) on \`${{ steps.r.outputs.ref }}\` — [watch the run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
 
-  # ---- build + host/x86 tests, on GitHub's own runner (fast feedback) --------
-  x86:
+  # ---- host / x86 tests ------------------------------------------------------
+  host:
     needs: resolve
+    if: needs.resolve.outputs.scope == 'all' || needs.resolve.outputs.scope == 'host'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+      - name: make check
+        run: make check
+
+  # ---- fw boot model under qemu (Python-heavy; fast on x86, slow on a Pi) ----
+  # Includes test_model_is_enforced, the HT801 model-enforcement test. Only
+  # v90nv.arm is actually ARM; apt's cross-gcc builds that static tool, so no
+  # pinned toolchain is needed for this target. CROSS=/QEMU= override the
+  # Makefile and propagate to the loader sub-make.
+  fw:
+    needs: resolve
+    if: needs.resolve.outputs.scope == 'all' || needs.resolve.outputs.scope == 'fw'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,25 +140,17 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q \
             gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi qemu-user-static
-      - name: Host / x86 tests
-        run: make check
-      - name: fw ARM tests under QEMU (boot model + v90nv.arm)
-        # The Python-heavy boot model -- including test_model_is_enforced, the
-        # HT801 model-enforcement test -- runs far faster here under qemu than
-        # natively on the Pi's A72. Only v90nv.arm is actually ARM, and apt's
-        # cross-gcc builds that static tool; the pinned toolchain is needed only
-        # for the kernel/loader, which this target does not build. CROSS= and
-        # QEMU= on the command line override the Makefile and propagate to the
-        # loader sub-make. (The compiled ARM test *programs* run on the Pi, in
-        # the 'arm' job's `make check-arm`.)
+      - name: fw test-v90nv
         run: make -C fw test-v90nv CROSS=arm-linux-gnueabi- QEMU=qemu-arm-static
 
   # ---- ARM-native tests on a throwaway Mythic Beasts Pi 4 --------------------
-  # This job runs in the cloud and *drives* the Pi over SSH; the Pi is never a
-  # GitHub runner. It is provisioned at the start and DELETED at the end (the
-  # teardown step runs even on failure/cancel), so nothing is left billing.
+  # Runs in the cloud and *drives* the Pi over SSH; the Pi is never a GitHub
+  # runner. Provisioned at the start and DELETED at the end (teardown runs even
+  # on failure/cancel), so nothing is left billing. Runs only the compiled ARM
+  # test programs (make check-arm), which are ~5x faster native than under qemu.
   arm:
-    needs: [resolve, x86]
+    needs: resolve
+    if: needs.resolve.outputs.scope == 'all' || needs.resolve.outputs.scope == 'arm'
     runs-on: ubuntu-latest
     env:
       MB_KEY_ID: ${{ secrets.MB_KEY_ID }}
@@ -220,8 +257,8 @@ jobs:
             fi
             echo "  waiting for sshd ($i)"; sleep 10
           done
-          # REF/REPO are expanded locally (they are our own inputs); the rest
-          # runs on the Pi. QEMU= makes every ARM binary run natively on the A72.
+          # REF/REPO are expanded locally (our own inputs); the rest runs on the
+          # Pi. QEMU= makes every ARM binary run natively on the A72.
           ssh -i ~/.ssh/ci -p "$PORT" -o StrictHostKeyChecking=accept-new \
               "root@$host" "REF='$REF' REPO='$REPO' bash -s" <<'REMOTE'
           set -euxo pipefail
@@ -243,29 +280,40 @@ jobs:
           echo "deleted $NAME"
 
   # ---- report back on the PR (comment + commit status) ----------------------
-  # Only when the run came from a PR comment. The "arm-check" status is what you
-  # add to a branch-protection rule to block merging until ARM is green.
+  # The "tests" status reflects whatever suites ran; a selective run (e.g.
+  # /test arm) sets it from that subset only, so require a full /test before
+  # merge if you gate on it.
   report:
-    needs: [resolve, x86, arm]
+    needs: [resolve, host, fw, arm]
     if: always() && needs.resolve.outputs.pr != ''
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Comment result and set commit status
+        env:
+          H: ${{ needs.host.result }}
+          F: ${{ needs.fw.result }}
+          A: ${{ needs.arm.result }}
         run: |
           set -euo pipefail
           url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          if [ "${{ needs.x86.result }}" = success ] && [ "${{ needs.arm.result }}" = success ]; then
-            state=success; body="✅ x86 + ARM tests passed on \`${{ needs.resolve.outputs.ref }}\`"
-          else
-            state=failure
-            body="❌ tests failed on \`${{ needs.resolve.outputs.ref }}\` (x86=${{ needs.x86.result }}, arm=${{ needs.arm.result }})"
-          fi
-          gh pr comment "${{ needs.resolve.outputs.pr }}" -R "${{ github.repository }}" \
-            --body "$body — [run]($url)."
+          emoji() { case "$1" in
+              success) echo "✅ passed";;
+              failure|cancelled|timed_out) echo "❌ $1";;
+              skipped) echo "➖ not run";;
+              *) echo "❔ $1";; esac; }
+          fail=0
+          for r in "$H" "$F" "$A"; do
+            case "$r" in failure|cancelled|timed_out) fail=1;; esac
+          done
+          [ "$fail" = 0 ] && state=success || state=failure
+          body=$(printf '**tests — \`%s\`** (scope: %s)\n\n- host (make check): %s\n- fw boot model (qemu): %s\n- arm native (Pi): %s\n\n[run](%s)' \
+                 "${{ needs.resolve.outputs.ref }}" "${{ needs.resolve.outputs.scope }}" \
+                 "$(emoji "$H")" "$(emoji "$F")" "$(emoji "$A")" "$url")
+          gh pr comment "${{ needs.resolve.outputs.pr }}" -R "${{ github.repository }}" --body "$body"
           if [ -n "${{ needs.resolve.outputs.sha }}" ]; then
             gh api -X POST "repos/${{ github.repository }}/statuses/${{ needs.resolve.outputs.sha }}" \
-              -f state="$state" -f context="arm-check" \
-              -f target_url="$url" -f description="x86 + ARM native tests" >/dev/null
+              -f state="$state" -f context="tests" \
+              -f target_url="$url" -f description="scope: ${{ needs.resolve.outputs.scope }}" >/dev/null
           fi
