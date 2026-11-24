@@ -1,16 +1,24 @@
 name: arm-tests
 
-# Manual-only on purpose: workflow_dispatch can be triggered ONLY by someone
-# with write access to this repo, so on a public mirror no outsider can start
-# a run (and GitHub never hands repo secrets to fork-PR-triggered runs). The
-# one rule: only ever dispatch test_ref against a branch you authored.
+# Two ways to start a run, both restricted to people with write access:
 #
-#   gh workflow run arm-tests.yml -f test_ref=my-feature
+#   1. Manually:  Actions -> arm-tests -> Run workflow  (or, with gh:
+#        gh workflow run arm-tests.yml -f test_ref=my-feature )
+#
+#   2. By commenting  /arm-check  on a pull request IN THIS REPO. Only a
+#      comment from an OWNER/MEMBER/COLLABORATOR triggers it, so no outsider
+#      can start a run (and GitHub never hands secrets to fork-PR events).
+#      It tests the PR's head branch and reports back on the PR with a comment
+#      and an "arm-check" commit status you can require in branch protection.
+#      (This works on PRs in THIS fork, not on the upstream PR.)
+#
+# The one rule: only ever run it against code you trust (your own branches /
+# your own PRs) -- the job compiles and runs the checked-out ref.
 #
 # Secrets required (Settings -> Secrets and variables -> Actions):
 #   MB_KEY_ID   Mythic Beasts API key id      (control panel -> API users)
 #   MB_SECRET   Mythic Beasts API key secret  (shown once at creation)
-#   MB_SSH_KEY  private half of a dedicated CI keypair (ed25519)
+#   MB_SSH_KEY  private half of a dedicated CI keypair (ed25519, no passphrase)
 # Optional repo variable:
 #   MB_OS_IMAGE override the OS image (default rpi-bookworm-arm64)
 
@@ -20,21 +28,68 @@ on:
       test_ref:
         description: Branch or SHA to test
         required: true
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
+  pull-requests: write   # post the result comment
+  statuses: write        # post the arm-check commit status
 
 env:
   API: https://api.mythic-beasts.com/beta
 
 jobs:
+  # ---- decide whether to run, and what ref to test --------------------------
+  resolve:
+    runs-on: ubuntu-latest
+    # dispatch by a write-access user, OR a "/arm-check" comment on a PR here
+    # from someone with write access. author_association is the commenter's,
+    # so only comment /arm-check on PRs whose code you trust.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       startsWith(github.event.comment.body, '/arm-check') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    outputs:
+      ref: ${{ steps.r.outputs.ref }}
+      sha: ${{ steps.r.outputs.sha }}
+      pr:  ${{ steps.r.outputs.pr }}
+    steps:
+      - name: Resolve ref (dispatch input or PR head)
+        id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            printf 'ref=%s\nsha=\npr=\n' "${{ inputs.test_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            pr='${{ github.event.issue.number }}'
+            info=$(gh pr view "$pr" -R "$REPO" --json headRefName,headRefOid)
+            printf 'ref=%s\nsha=%s\npr=%s\n' \
+              "$(printf '%s' "$info" | jq -r .headRefName)" \
+              "$(printf '%s' "$info" | jq -r .headRefOid)" \
+              "$pr" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Acknowledge on the PR
+        if: steps.r.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ steps.r.outputs.pr }}" -R "${{ github.repository }}" \
+            --body "⏳ ARM tests started on \`${{ steps.r.outputs.ref }}\` — [watch the run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+
   # ---- build + host/x86 tests, on GitHub's own runner (fast feedback) --------
   x86:
+    needs: resolve
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.test_ref }}
+          ref: ${{ needs.resolve.outputs.ref }}
       - name: Host / x86 tests
         run: make check
 
@@ -43,7 +98,7 @@ jobs:
   # GitHub runner. It is provisioned at the start and DELETED at the end (the
   # teardown step runs even on failure/cancel), so nothing is left billing.
   arm:
-    needs: x86
+    needs: [resolve, x86]
     runs-on: ubuntu-latest
     env:
       MB_KEY_ID: ${{ secrets.MB_KEY_ID }}
@@ -137,7 +192,7 @@ jobs:
 
       - name: Run ARM tests on the Pi
         env:
-          REF: ${{ inputs.test_ref }}
+          REF: ${{ needs.resolve.outputs.ref }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -171,3 +226,31 @@ jobs:
           curl -fsS -X DELETE -H "Authorization: Bearer $TOK" \
                "$API/pi/servers/$NAME" || true
           echo "deleted $NAME"
+
+  # ---- report back on the PR (comment + commit status) ----------------------
+  # Only when the run came from a PR comment. The "arm-check" status is what you
+  # add to a branch-protection rule to block merging until ARM is green.
+  report:
+    needs: [resolve, x86, arm]
+    if: always() && needs.resolve.outputs.pr != ''
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Comment result and set commit status
+        run: |
+          set -euo pipefail
+          url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ "${{ needs.x86.result }}" = success ] && [ "${{ needs.arm.result }}" = success ]; then
+            state=success; body="✅ x86 + ARM tests passed on \`${{ needs.resolve.outputs.ref }}\`"
+          else
+            state=failure
+            body="❌ tests failed on \`${{ needs.resolve.outputs.ref }}\` (x86=${{ needs.x86.result }}, arm=${{ needs.arm.result }})"
+          fi
+          gh pr comment "${{ needs.resolve.outputs.pr }}" -R "${{ github.repository }}" \
+            --body "$body — [run]($url)."
+          if [ -n "${{ needs.resolve.outputs.sha }}" ]; then
+            gh api -X POST "repos/${{ github.repository }}/statuses/${{ needs.resolve.outputs.sha }}" \
+              -f state="$state" -f context="arm-check" \
+              -f target_url="$url" -f description="x86 + ARM native tests" >/dev/null
+          fi
