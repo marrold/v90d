@@ -1,0 +1,173 @@
+name: arm-tests
+
+# Manual-only on purpose: workflow_dispatch can be triggered ONLY by someone
+# with write access to this repo, so on a public mirror no outsider can start
+# a run (and GitHub never hands repo secrets to fork-PR-triggered runs). The
+# one rule: only ever dispatch test_ref against a branch you authored.
+#
+#   gh workflow run arm-tests.yml -f test_ref=my-feature
+#
+# Secrets required (Settings -> Secrets and variables -> Actions):
+#   MB_KEY_ID   Mythic Beasts API key id      (control panel -> API users)
+#   MB_SECRET   Mythic Beasts API key secret  (shown once at creation)
+#   MB_SSH_KEY  private half of a dedicated CI keypair (ed25519)
+# Optional repo variable:
+#   MB_OS_IMAGE override the OS image (default rpi-bookworm-arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_ref:
+        description: Branch or SHA to test
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  API: https://api.mythic-beasts.com/beta
+
+jobs:
+  # ---- build + host/x86 tests, on GitHub's own runner (fast feedback) --------
+  x86:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.test_ref }}
+      - name: Host / x86 tests
+        run: make check
+
+  # ---- ARM-native tests on a throwaway Mythic Beasts Pi 4 --------------------
+  # This job runs in the cloud and *drives* the Pi over SSH; the Pi is never a
+  # GitHub runner. It is provisioned at the start and DELETED at the end (the
+  # teardown step runs even on failure/cancel), so nothing is left billing.
+  arm:
+    needs: x86
+    runs-on: ubuntu-latest
+    env:
+      MB_KEY_ID: ${{ secrets.MB_KEY_ID }}
+      MB_SECRET: ${{ secrets.MB_SECRET }}
+      OS_IMAGE: ${{ vars.MB_OS_IMAGE || 'rpi-bookworm-arm64' }}
+    steps:
+      - name: Get API token
+        # The token is tied to the IP that fetched it, so we obtain and use it
+        # entirely within this one job (one runner = one egress IP).
+        run: |
+          set -euo pipefail
+          tok=$(curl -fsS --user "$MB_KEY_ID:$MB_SECRET" \
+                 -d grant_type=client_credentials \
+                 https://auth.mythic-beasts.com/login | jq -r .access_token)
+          echo "::add-mask::$tok"
+          echo "TOK=$tok" >> "$GITHUB_ENV"
+
+      - name: Reap any stale CI Pis
+        # Insurance against an earlier run that was hard-killed before teardown.
+        # (A scheduled reaper is disabled by GitHub on forks; doing it here is
+        # fork-safe. 2 hour grace.)
+        run: |
+          set -euo pipefail
+          now=$(date +%s)
+          curl -fsS -H "Authorization: Bearer $TOK" "$API/pi/servers" \
+            | jq -r '.servers | keys[]' | while read -r n; do
+              case "$n" in
+                ci-*)
+                  epoch=$(printf '%s' "$n" | sed -n 's/^ci-\([0-9]\{1,\}\)-.*/\1/p')
+                  [ -n "$epoch" ] || continue
+                  if [ $((now - epoch)) -gt 7200 ]; then
+                    echo "reaping stale $n"
+                    curl -fsS -X DELETE -H "Authorization: Bearer $TOK" \
+                      "$API/pi/servers/$n" || true
+                  fi ;;
+              esac
+            done
+
+      - name: Install CI SSH key
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.MB_SSH_KEY }}" > ~/.ssh/ci
+          chmod 600 ~/.ssh/ci
+          ssh-keygen -y -f ~/.ssh/ci > ~/.ssh/ci.pub
+
+      - name: Provision Pi 4
+        run: |
+          set -euo pipefail
+          name="ci-$(date +%s)-$GITHUB_RUN_ID"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+          body=$(jq -n --arg k "$(cat ~/.ssh/ci.pub)" --arg img "$OS_IMAGE" \
+                 '{model:4, disk:10, wait_for_dns:true, ssh_key:$k, os_image:$img}')
+          echo "Provisioning $name with $OS_IMAGE"
+          loc=$(curl -fsS -D - -o /dev/null -X POST \
+                 -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
+                 -d "$body" "$API/pi/servers/$name" \
+                 | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+          [ -n "$loc" ] || { echo "no Location header from provision"; exit 1; }
+          echo "queued: $loc"
+          code=000
+          for i in $(seq 1 60); do        # ~10 min; create is typically 2-3 min
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+                    -H "Authorization: Bearer $TOK" "$loc")
+            echo "  provision poll: $code"
+            [ "$code" = "202" ] || break
+            sleep 10
+          done
+          case "$code" in
+            200|303) : ;;
+            *) echo "provision failed (HTTP $code)"; exit 1 ;;
+          esac
+
+      - name: Wait for boot
+        run: |
+          set -euo pipefail
+          port=
+          for i in $(seq 1 60); do
+            j=$(curl -fsS -H "Authorization: Bearer $TOK" "$API/pi/servers/$NAME")
+            power=$(printf '%s' "$j" | jq -r '.power')
+            booting=$(printf '%s' "$j" | jq -r '.is_booting')
+            p=$(printf '%s' "$j" | jq -r '.ssh_port')
+            echo "  power=$power booting=$booting ssh_port=$p"
+            if [ "$power" = "true" ] && [ "$booting" = "false" ] && [ "$p" != "null" ]; then
+              port=$p; break
+            fi
+            sleep 10
+          done
+          [ -n "$port" ] || { echo "Pi did not become ready"; exit 1; }
+          echo "PORT=$port" >> "$GITHUB_ENV"
+
+      - name: Run ARM tests on the Pi
+        env:
+          REF: ${{ inputs.test_ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          host="ssh.$NAME.hostedpi.com"
+          # wait for sshd to answer (DNS + boot can lag the "ready" flag)
+          for i in $(seq 1 30); do
+            if ssh -i ~/.ssh/ci -p "$PORT" -o StrictHostKeyChecking=accept-new \
+                   -o ConnectTimeout=10 "root@$host" true 2>/dev/null; then
+              break
+            fi
+            echo "  waiting for sshd ($i)"; sleep 10
+          done
+          # REF/REPO are expanded locally (they are our own inputs); the rest
+          # runs on the Pi. QEMU= makes every ARM binary run natively on the A72.
+          ssh -i ~/.ssh/ci -p "$PORT" -o StrictHostKeyChecking=accept-new \
+              "root@$host" "REF='$REF' REPO='$REPO' bash -s" <<'REMOTE'
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -q
+          apt-get install -y -q git make gcc-arm-linux-gnueabi
+          rm -rf ci
+          git clone --depth 1 --branch "$REF" "https://github.com/$REPO" ci
+          cd ci
+          make check-arm QEMU= ARM_CC=arm-linux-gnueabi-gcc
+          REMOTE
+
+      - name: Delete the Pi
+        if: always()
+        run: |
+          [ -n "${NAME:-}" ] || exit 0
+          curl -fsS -X DELETE -H "Authorization: Bearer $TOK" \
+               "$API/pi/servers/$NAME" || true
+          echo "deleted $NAME"
