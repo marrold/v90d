@@ -1,0 +1,8 @@
+# this branch holds only .github/ (the workflows) and this file (see
+# README.md) -- ignore everything else so switching into it from a normal
+# checkout doesn't show the whole source tree's build output as untracked.
+*
+!.gitignore
+!README.md
+!.github
+!.github/**

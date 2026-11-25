@@ -23,7 +23,8 @@ name: tests
 #   MB_SECRET   Mythic Beasts API key secret  (shown once at creation)
 #   MB_SSH_KEY  private half of a dedicated CI keypair (ed25519, no passphrase)
 # Optional repo variable:
-#   MB_OS_IMAGE override the OS image (default rpi-bookworm-arm64)
+#   MB_OS_IMAGE override the OS image; see the "arm" job for how to find a
+#               valid id. Unset: the API's own default image is used.
 
 on:
   workflow_dispatch:
@@ -146,7 +147,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q \
-            gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi qemu-user-static
+            gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi qemu-user-binfmt
       - name: fw test-v90nv
         run: make -C fw test-v90nv CROSS=arm-linux-gnueabi- QEMU=qemu-arm-static
 
@@ -162,7 +163,11 @@ jobs:
     env:
       MB_KEY_ID: ${{ secrets.MB_KEY_ID }}
       MB_SECRET: ${{ secrets.MB_SECRET }}
-      OS_IMAGE: ${{ vars.MB_OS_IMAGE || 'rpi-bookworm-arm64' }}
+      # No hardcoded default: an unconfirmed image id just 400s the provision
+      # request. Set the MB_OS_IMAGE repo variable to an id from
+      # `GET /pi/images/4` (Bearer $MB token) once you've confirmed one; until
+      # then this is empty and the API picks its own default image.
+      OS_IMAGE: ${{ vars.MB_OS_IMAGE || '' }}
     steps:
       - name: Get API token
         # The token is tied to the IP that fetched it, so we obtain and use it
@@ -210,12 +215,17 @@ jobs:
           name="ci-$(date +%s)-$GITHUB_RUN_ID"
           echo "NAME=$name" >> "$GITHUB_ENV"
           body=$(jq -n --arg k "$(cat ~/.ssh/ci.pub)" --arg img "$OS_IMAGE" \
-                 '{model:4, disk:10, wait_for_dns:true, ssh_key:$k, os_image:$img}')
-          echo "Provisioning $name with $OS_IMAGE"
-          loc=$(curl -fsS -D - -o /dev/null -X POST \
+                 '{model:4, disk:10, wait_for_dns:true, ssh_key:$k} + (if $img != "" then {os_image:$img} else {} end)')
+          echo "Provisioning $name${OS_IMAGE:+ with $OS_IMAGE}"
+          hdrs=$(mktemp); resp=$(mktemp)
+          code=$(curl -sS -D "$hdrs" -o "$resp" -w '%{http_code}' -X POST \
                  -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
-                 -d "$body" "$API/pi/servers/$name" \
-                 | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+                 -d "$body" "$API/pi/servers/$name")
+          if [ "$code" != 202 ]; then
+            echo "provision request failed (HTTP $code):"; cat "$resp"
+            exit 1
+          fi
+          loc=$(tr -d '\r' < "$hdrs" | awk 'tolower($1)=="location:"{print $2}')
           [ -n "$loc" ] || { echo "no Location header from provision"; exit 1; }
           echo "queued: $loc"
           code=000
