@@ -303,11 +303,18 @@ jobs:
           date
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -q
-          apt-get install -y -q git make gcc-arm-linux-gnueabi
+          # Native Pi, not a cross-build host: gcc-arm-linux-gnueabi (a
+          # cross-compiler package for an x86 host targeting ARM) isn't
+          # even installable here -- plain gcc is both host and target.
+          apt-get install -y -q git make gcc
           rm -rf ci
           git clone --depth 1 --branch "$REF" "https://github.com/$REPO" ci
           cd ci
-          make check-arm QEMU= ARM_CC=arm-linux-gnueabi-gcc
+          # Two separate compiler knobs both default to a cross-toolchain
+          # path that doesn't exist on the Pi (no toolchain/ dir): ARM_CC
+          # compiles v90d's own ARM test binaries, LIBV90M_ARM_CC (in
+          # libv90m.mk) builds the libv90modem archive they link against.
+          make check-arm QEMU= ARM_CC=gcc LIBV90M_ARM_CC=gcc
           REMOTE
 
       - name: Delete the Pi
