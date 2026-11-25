@@ -317,10 +317,15 @@ jobs:
           # Native Pi, not a cross-build host: gcc-arm-linux-gnueabi (a
           # cross-compiler package for an x86 host targeting ARM) isn't
           # even installable here -- plain gcc is both host and target.
-          apt-get install -y -q git make gcc
+          apt-get install -y -q git make gcc curl
           rm -rf ci
           git clone --depth 1 --branch "$REF" "https://github.com/$REPO" ci
           cd ci
+          # check-arm needs libv90modem fetched first (libv90m.mk), same as
+          # the host job -- fw/setup-libv90m.sh is the lightweight fetch for
+          # that, not the full fw/setup.sh (toolchain/kernel/busybox/OpenVPN,
+          # none of which this native run needs).
+          sh fw/setup-libv90m.sh
           # Two separate compiler knobs both default to a cross-toolchain
           # path that doesn't exist on the Pi (no toolchain/ dir): ARM_CC
           # compiles v90d's own ARM test binaries, LIBV90M_ARM_CC (in
