@@ -39,13 +39,23 @@ get https://swupdate.openvpn.org/community/releases/openvpn-2.6.12.tar.gz \
     "$fw/dl/openvpn-2.6.12.tar.gz" 1c610fddeb686e34f1367c347e027e418e07523a10f4d8ce4a2c2af2f61a1929
 get https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-2.28.9/mbedtls-2.28.9.tar.bz2 \
     "$fw/dl/mbedtls-2.28.9.tar.bz2" e85ea97aaf78dd6c0a5ba2e54dd5932ffa15f39abfc189c26beef7684630c02b
-
-sh "$fw/setup-libv90m.sh"
+get https://github.com/georgica/libv90modem/releases/download/v$LIBV90M_VER/libv90modem-$LIBV90M_VER.tar.gz \
+    "$fw/dl/libv90modem-$LIBV90M_VER.tar.gz" $LIBV90M_SHA
 
 [ -x "$top/toolchain/$TC/bin/arm-linux-gcc" ] || { echo "unpacking the toolchain"; tar -C "$top/toolchain" -xjf "$top/toolchain/$TC.tar.bz2"; "$top/toolchain/$TC/relocate-sdk.sh" >/dev/null; }
 mkdir -p "$fw/build"
 [ -d "$fw/build/linux-$KVER" ] || { echo "unpacking Linux $KVER"; tar -C "$fw/build" -xJf "$fw/dl/linux-$KVER.tar.xz"; }
 [ -d "$fw/build/$BB" ] || { echo "unpacking $BB"; tar -C "$fw/build" -xjf "$fw/dl/$BB.tar.bz2"; }
+# libv90modem goes at $top/libv90modem (where libv90m.mk looks by default); a
+# version stamp makes a bumped LIBV90M_VER replace it. A developer's own
+# checkout is used instead with make LIBV90M=/path/to/libv90modem.
+if [ ! -f "$top/libv90modem/include/v90modem.h" ] || [ "$(cat "$top/libv90modem/.v90m-version" 2>/dev/null)" != "$LIBV90M_VER" ]; then
+    echo "unpacking libv90modem $LIBV90M_VER"
+    rm -rf "$top/libv90modem" "$top/libv90modem-$LIBV90M_VER"
+    tar -C "$top" -xzf "$fw/dl/libv90modem-$LIBV90M_VER.tar.gz"
+    mv "$top/libv90modem-$LIBV90M_VER" "$top/libv90modem"
+    echo "$LIBV90M_VER" > "$top/libv90modem/.v90m-version"
+fi
 if [ ! -x "$fw/build/$BB/busybox" ]; then
     echo "building busybox"
     cp "$fw/busybox.config" "$fw/build/$BB/.config"
