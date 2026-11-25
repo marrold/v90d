@@ -291,6 +291,16 @@ jobs:
           ssh -i ~/.ssh/ci -p "$PORT" -o StrictHostKeyChecking=accept-new \
               "root@$host" "REF='$REF' REPO='$REPO' bash -s" <<'REMOTE'
           set -euxo pipefail
+          # A freshly booted Pi's clock hasn't synced via NTP yet, which
+          # makes apt reject the mirrors' Release files (not valid yet) and
+          # would do the same to git's HTTPS clone below (cert validity).
+          # Force a sync and wait for it before anything time-sensitive.
+          timedatectl set-ntp true
+          for i in $(seq 1 30); do
+            if [ "$(timedatectl show -p NTPSynchronized --value)" = yes ]; then break; fi
+            sleep 2
+          done
+          date
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -q
           apt-get install -y -q git make gcc-arm-linux-gnueabi
