@@ -119,6 +119,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.ref }}
+      - name: Cache libv90modem download
+        uses: actions/cache@v4
+        with:
+          path: fw/dl
+          key: libv90m-${{ hashFiles('fw/setup-libv90m.sh') }}
+      - name: Fetch libv90modem (make check needs it; see libv90m.mk)
+        run: sh fw/setup-libv90m.sh
       - name: make check
         run: make check
 
