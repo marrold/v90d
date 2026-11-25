@@ -149,7 +149,7 @@ jobs:
           sudo apt-get install -y -q \
             gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi qemu-user-binfmt
       - name: fw test-v90nv
-        run: make -C fw test-v90nv CROSS=arm-linux-gnueabi- QEMU=qemu-arm-static
+        run: make -C fw test-v90nv CROSS=arm-linux-gnueabi- QEMU=qemu-arm
 
   # ---- ARM-native tests on a throwaway Mythic Beasts Pi 4 --------------------
   # Runs in the cloud and *drives* the Pi over SSH; the Pi is never a GitHub
@@ -212,7 +212,10 @@ jobs:
       - name: Provision Pi 4
         run: |
           set -euo pipefail
-          name="ci-$(date +%s)-$GITHUB_RUN_ID"
+          # Mythic Beasts service identifiers are capped at 20 chars; the
+          # epoch (for the reaper's staleness check) plus the run id's last
+          # 5 digits (for uniqueness) is enough and fits.
+          name="ci-$(date +%s)-${GITHUB_RUN_ID: -5}"
           echo "NAME=$name" >> "$GITHUB_ENV"
           body=$(jq -n --arg k "$(cat ~/.ssh/ci.pub)" --arg img "$OS_IMAGE" \
                  '{model:4, disk:10, wait_for_dns:true, ssh_key:$k} + (if $img != "" then {os_image:$img} else {} end)')
