@@ -286,30 +286,20 @@ jobs:
             fi
             echo "  waiting for sshd ($i)"; sleep 10
           done
-          # REF/REPO are expanded locally (our own inputs); the rest runs on the
-          # Pi. QEMU= makes every ARM binary run natively on the A72.
+          # REF/REPO/NOW are expanded locally (our own inputs); the rest runs
+          # on the Pi. QEMU= makes every ARM binary run natively on the A72.
+          now=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           ssh -i ~/.ssh/ci -p "$PORT" -o StrictHostKeyChecking=accept-new \
-              "root@$host" "REF='$REF' REPO='$REPO' bash -s" <<'REMOTE'
+              "root@$host" "REF='$REF' REPO='$REPO' NOW='$now' bash -s" <<'REMOTE'
           set -euxo pipefail
-          # A freshly booted Pi's clock can be badly wrong (observed off by
-          # years), which makes apt reject the mirrors' Release files (not
-          # valid yet) and would do the same to git's HTTPS clone below
-          # (cert validity). Raspberry Pi OS images commonly run chrony
-          # rather than systemd-timesyncd (which is why `timedatectl
-          # set-ntp` reported "not supported" here); chrony's own
-          # `makestep` is the documented way to force an immediate
-          # correction when the clock is this far off. Fall back to
-          # timedatectl for images that do use timesyncd instead.
-          if command -v chronyc >/dev/null 2>&1; then
-            chronyc makestep || true
-            chronyc waitsync 30 0 0 2 || true
-          elif command -v timedatectl >/dev/null 2>&1; then
-            timedatectl set-ntp true || true
-            for i in $(seq 1 30); do
-              if [ "$(timedatectl show -p NTPSynchronized --value)" = yes ]; then break; fi
-              sleep 2
-            done
-          fi
+          # This image's clock boots frozen at a fixed, years-stale
+          # snapshot every time (observed: 2023-07-29, no RTC drift at
+          # all) -- there's no NTP client on it at all to fix that (no
+          # chronyc; `timedatectl set-ntp` says "NTP not supported", no
+          # timesyncd unit). The runner's own clock is already correct, so
+          # just set the Pi's from that over the SSH connection we already
+          # have, instead of asking the Pi to get time from anywhere.
+          date -s "$NOW"
           date
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -q
