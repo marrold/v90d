@@ -44,6 +44,7 @@ permissions:
   contents: read
   pull-requests: write   # post the result comment
   statuses: write        # post the "tests" commit status
+  actions: write         # a failing job cancels the run, so its siblings stop too
 
 env:
   API: https://api.mythic-beasts.com/beta
@@ -129,6 +130,11 @@ jobs:
         run: sh fw/setup-libv90m.sh
       - name: make check
         run: make check
+      - name: Cancel the run if this job failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel ${{ github.run_id }} -R ${{ github.repository }}
 
   # ---- fw boot model under qemu (Python-heavy; fast on x86, slow on a Pi) ----
   # Includes test_model_is_enforced, the HT801 model-enforcement test. Only
@@ -150,6 +156,11 @@ jobs:
             gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi qemu-user-binfmt
       - name: fw test-v90nv
         run: make -C fw test-v90nv CROSS=arm-linux-gnueabi- QEMU=qemu-arm
+      - name: Cancel the run if this job failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel ${{ github.run_id }} -R ${{ github.repository }}
 
   # ---- ARM-native tests on a throwaway Mythic Beasts Pi 4 --------------------
   # Runs in the cloud and *drives* the Pi over SSH; the Pi is never a GitHub
@@ -324,6 +335,11 @@ jobs:
           curl -fsS -X DELETE -H "Authorization: Bearer $TOK" \
                "$API/pi/servers/$NAME" || true
           echo "deleted $NAME"
+      - name: Cancel the run if this job failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel ${{ github.run_id }} -R ${{ github.repository }}
 
   # ---- report back on the PR (comment + commit status) ----------------------
   # The "tests" status reflects whatever suites ran; a selective run (e.g.
@@ -333,6 +349,13 @@ jobs:
     needs: [resolve, host, fw, arm]
     if: always() && needs.resolve.outputs.pr != ''
     runs-on: ubuntu-latest
+    # A job gated on needs: + if: always() has a known GitHub Actions edge
+    # case (actions/runner#4411) where, after a run is cancelled (which a
+    # failing host/fw/arm job now does to its siblings -- see "Cancel the
+    # run if this job failed"), it can get stuck queued indefinitely rather
+    # than running. Bounds that to a short, visible failure instead of a
+    # silent multi-hour hang if it ever happens.
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
