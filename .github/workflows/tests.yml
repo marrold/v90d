@@ -248,11 +248,20 @@ jobs:
         run: |
           set -euo pipefail
           port=
+          status=$(mktemp)
           for i in $(seq 1 60); do
-            j=$(curl -fsS -H "Authorization: Bearer $TOK" "$API/pi/servers/$NAME")
-            power=$(printf '%s' "$j" | jq -r '.power')
-            booting=$(printf '%s' "$j" | jq -r '.is_booting')
-            p=$(printf '%s' "$j" | jq -r '.ssh_port')
+            # Not -f: a mid-provision status read can transiently 4xx/5xx,
+            # which isn't fatal here -- just retry it like any other
+            # not-ready-yet poll instead of killing the step.
+            code=$(curl -sS -o "$status" -w '%{http_code}' \
+                   -H "Authorization: Bearer $TOK" "$API/pi/servers/$NAME")
+            if [ "$code" != 200 ]; then
+              echo "  status poll: HTTP $code"; cat "$status" || true
+              sleep 10; continue
+            fi
+            power=$(jq -r '.power' "$status")
+            booting=$(jq -r '.is_booting' "$status")
+            p=$(jq -r '.ssh_port' "$status")
             echo "  power=$power booting=$booting ssh_port=$p"
             if [ "$power" = "true" ] && [ "$booting" = "false" ] && [ "$p" != "null" ]; then
               port=$p; break
