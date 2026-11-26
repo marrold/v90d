@@ -11,8 +11,8 @@ int page_consoles_tab;      /* page.h */
 
 /* names: machine form for JSON, display form for HTML */
 static const char *const line_names[]  = { "idle", "ringing", "negotiating", "connected", "hanging up" };
-static const char *const mod_json[]    = { "none", "v90", "v34", "v32bis", "v22bis", "v22", "v21", "v92", "bell103", "bell212a", "x2", "k56flex" };
-static const char *const mod_html[]    = { "none", "V.90", "V.34", "V.32bis", "V.22bis", "V.22", "V.21", "V.92", "Bell 103", "Bell 212A", "x2", "K56flex" };
+static const char *const mod_json[]    = { "none", "v90", "v34", "v32bis", "v22bis", "v22", "v21", "v92", "bell103", "bell212a", "x2", "k56flex", "v23" };
+static const char *const mod_html[]    = { "none", "V.90", "V.34", "V.32bis", "V.22bis", "V.22", "V.21", "V.92", "Bell 103", "Bell 212A", "x2", "K56flex", "V.23" };
 static const char *const v42_json[]    = { "off", "detect", "lapm", "async" };
 static const char *const v42_html[]    = { "off", "detecting", "LAPM", "async fallback" };
 static const char *const ppp_names[]   = { "dead", "establish", "authenticate", "network",

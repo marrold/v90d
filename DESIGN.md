@@ -154,6 +154,10 @@ setting of their own: a port that has V.21 on offers Bell 103
 (`V90M_MOD_BELL212A`), and a call that began during the 2225 Hz tone is
 shown as "Bell 212A". Bell 103 has no error control, as V.21.
 
+V.23 (1200 bit/s from the answering side, 75 bit/s back; either role) has
+its own setting, `v23`, off by default: it has only been tried in the
+library's simulation and against its own answerer. It has no error control.
+
 ## 5. Above the modem
 
 - `v42/`: answerer role. Detection phase (ODP/ADP), LAPM with selective

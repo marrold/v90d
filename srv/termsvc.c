@@ -119,6 +119,7 @@ static const char *mod_name(int m, int dotted)
     case V90M_CONN_BELL212A: return dotted ? "Bell 212A" : "B212";
     case V90M_CONN_V21: return dotted ? "V.21" : "V21";
     case V90M_CONN_BELL103: return dotted ? "Bell 103" : "B103";
+    case V90M_CONN_V23: return dotted ? "V.23" : "V23";
     default: return "";
     }
 }

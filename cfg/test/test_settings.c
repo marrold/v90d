@@ -656,7 +656,7 @@ static void test_port2(void)
     CHECK_EQ_I(out.port2.modulations, CFG_MOD_V34 | CFG_MOD_V21);
     CHECK_EQ_I(apply(&c, "mods=1&mod_v22bis=1&max_upstream=2400&port=2", &out), SETTINGS_OK);
     CHECK_EQ_I(out.port2.modulations, CFG_MOD_V22BIS); CHECK_EQ_I(out.port2.max_up, 2400);
-    CHECK_EQ_I(out.modulations, CFG_MOD_ALL); CHECK_EQ_I(out.max_up, 33600);
+    CHECK_EQ_I(out.modulations, CFG_MOD_DEFAULT); CHECK_EQ_I(out.max_up, 33600);
     CHECK(out.port2.ppp_peer == c.port2.ppp_peer && out.ppp_peer == c.ppp_peer);
     /* port=1 is port 1 */
     CHECK_EQ_I(apply(&c, "port=1&number=5", &out), SETTINGS_OK);
@@ -815,7 +815,7 @@ static void test_apply(void)
     CHECK(strcmp(err, "[modem] modulations: empty list") == 0);
     /* without it each field switches one modulation */
     CHECK_EQ_I(apply(&cur, "mod_v90=0", &out), SETTINGS_OK);
-    CHECK_EQ_I(out.modulations, CFG_MOD_ALL & ~CFG_MOD_V90);
+    CHECK_EQ_I(out.modulations, CFG_MOD_DEFAULT & ~CFG_MOD_V90);
     cur.modulations = CFG_MOD_V90;
     CHECK_EQ_I(apply(&cur, "mod_v22bis=1&mod_v90=0", &out), SETTINGS_OK);
     CHECK_EQ_I(out.modulations, CFG_MOD_V22BIS);

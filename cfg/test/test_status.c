@@ -351,6 +351,7 @@ static void test_enums(void)
         CHECK(has(html, want));
     }
     CHECK_EQ_I(ST_MOD_V21, 6); CHECK_EQ_I(ST_MOD_V92, 7); CHECK_EQ_I(ST_MOD_BELL103, 8); CHECK_EQ_I(ST_MOD_BELL212A, 9);      /* appended: the old values stay */
+    CHECK_EQ_I(ST_MOD_X2, 10); CHECK_EQ_I(ST_MOD_K56FLEX, 11); CHECK_EQ_I(ST_MOD_V23, 12);
     for (i = 0; i < 10; i++) {
         st_call_t call;
         status_init(&s); s.modulation = (st_mod_t)i;
@@ -379,7 +380,7 @@ static void test_enums(void)
     CHECK(has(html, "<p class=\"sum\">V.92 &middot; 52000 / 44000 bit/s</p>"));
     /* the upstream bar is scaled to 48000 for V.92: 44000 is 91% of it */
     CHECK(has(html, "<small>Upstream</small><b>44000</b> bit/s<div class=\"m\"><i style=\"width:91%\"></i></div></div>"));
-    s.modulation = (st_mod_t)12;
+    s.modulation = (st_mod_t)13;
     CHECK(status_render_json(&s, json, sizeof json) > 0);
     CHECK(has(json, "\"modulation\":\"unknown\""));
     status_init(&s); s.line = ST_LINE_CONNECTED; s.modulation = ST_MOD_V34;

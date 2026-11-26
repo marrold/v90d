@@ -117,7 +117,7 @@ void    srv_set_rx_linear(srv_t *s, int on);
 void    srv_set_max_tx_code(srv_t *s, int code);
 /* Bench: the box calls. A modem on the port that goes off hook (it was told
  * ATA) is called at once by the library's calling modem (V.34, V.32bis,
- * V.22bis, V.22, V.21 so far), with V.42 as the originator. Takes effect with the next
+ * V.22bis, V.22, V.21, V.23 so far), with V.42 as the originator. Takes effect with the next
  * call; the port takes no calls in this mode. */
 void    srv_set_originate(srv_t *s, int on);
 /* Share a heavy-call arbiter across the ports: *slot counts the calls that

@@ -385,7 +385,7 @@ static int on_save(void *ctx, const cfg_t *n)
 }
 
 static const char *const tel_name[] = { "answered", "busy", "wrong number", "abandoned", "line dropped", "session limit", "idle timeout" };
-static const char *const mod_name[] = { "no carrier", "V.90", "V.34", "V.32bis", "V.22bis", "V.22", "V.21", "V.92", "Bell 103", "Bell 212A" };
+static const char *const mod_name[] = { "no carrier", "V.90", "V.34", "V.32bis", "V.22bis", "V.22", "V.21", "V.92", "Bell 103", "Bell 212A", "x2", "K56flex", "V.23" };
 
 /* PPP compression (CCP) of the call that ended: one line, only if it was used */
 static void log_ppp_comp(const char *who, const ppp_t *ppp)
@@ -496,7 +496,7 @@ static void usage(void)
 {
     fprintf(stderr, "usage: v90d [-c FILE] -l LINE [-l LINE2] [-d N] [-i LAN-IF] [-t TUN] [-A GATEWAY] [-D FETCH-COMMAND] [-G REPORT-PROGRAM] [-E LEASE-COMMAND] [-v]\n       v90d [-c FILE] -p\n"
                     "bench: [-R l|c per port, e.g. lc] [-P 1..31: maximum downstream power code] [-w|-W FILE: record port 1|2]\n"
-                    "       [-o: the box calls a modem that goes off hook (told ATA): V.34, V.32bis, V.22bis, V.22, V.21]\n");
+                    "       [-o: the box calls a modem that goes off hook (told ATA): V.34, V.32bis, V.22bis, V.22, V.21, V.23]\n");
     exit(2);
 }
 

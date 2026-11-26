@@ -38,7 +38,8 @@ typedef enum {
     ST_MOD_V92,         /* appended: the values above stay as they were */
     ST_MOD_BELL103, ST_MOD_BELL212A,
     ST_MOD_X2,          /* appended: x2 (U.S. Robotics' 56k of 1997) */
-    ST_MOD_K56FLEX      /* appended: K56flex (the 1996 56k, experimental) */
+    ST_MOD_K56FLEX,     /* appended: K56flex (the 1996 56k, experimental) */
+    ST_MOD_V23          /* appended: V.23, 1200/75 bit/s asymmetric FSK */
 } st_mod_t;
 
 typedef enum {

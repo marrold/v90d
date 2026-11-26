@@ -60,7 +60,7 @@ static const char *const n_tones[]  = { "us", "eu" };
 static const char *const n_service[] = { "internet", "archive", "dreamcast", "saturn" };
 static const char *const n_listen[] = { "off", "lan" };
 static const char *const n_level[]  = { "error", "warn", "info", "debug" };
-static const char *const n_mods[]   = { "v90", "v34", "v32bis", "v22bis", "v22", "v21" };  /* bit i */
+static const char *const n_mods[]   = { "v90", "v34", "v32bis", "v22bis", "v22", "v21", "v23" };  /* bit i */
 /* the same lists in the order the messages and the docs give them */
 static const char l_lan[]    = "dhcp, static";
 static const char l_onoff[]  = "on, off";
@@ -70,7 +70,7 @@ static const char l_tones[]  = "us, eu";
 static const char l_service[] = "internet, archive, dreamcast, saturn";
 static const char l_listen[] = "lan, off";
 static const char l_level[]  = "error, warn, info, debug";
-static const char l_mods[]   = "v90, v34, v32bis, v22bis, v22, v21";
+static const char l_mods[]   = "v90, v34, v32bis, v22bis, v22, v21, v23";
 
 /* the [modem] and [line] fields of *c into a port, and back */
 static void port_take(cfg_port_t *p, const cfg_t *c)
@@ -130,7 +130,7 @@ void cfg_default(cfg_t *c)
     c->echo_interval = 30;
     c->compression   = 1;
     c->encryption    = 0;
-    c->modulations   = CFG_MOD_ALL;
+    c->modulations   = CFG_MOD_DEFAULT;
     c->max_down      = 56000;
     c->max_up        = 33600;
     c->tx_level      = -12;
