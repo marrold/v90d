@@ -56,7 +56,8 @@ static void test_more_mods(void)
 {
     static char text[CFG_TEXT_MAX];
     cfg_t c;
-    CHECK_EQ_I(CFG_MOD_ALL, CFG_MOD_V90 | CFG_MOD_V34 | CFG_MOD_V32BIS | CFG_MOD_V22BIS | CFG_MOD_V22 | CFG_MOD_V21);
+    CHECK_EQ_I(CFG_MOD_ALL, CFG_MOD_V90 | CFG_MOD_V34 | CFG_MOD_V32BIS | CFG_MOD_V22BIS | CFG_MOD_V22 | CFG_MOD_V21 | CFG_MOD_V23);
+    CHECK_EQ_I(CFG_MOD_DEFAULT, CFG_MOD_ALL & ~CFG_MOD_V23);
     CHECK_EQ_I(parse(&c, "[modem]\nmodulations = v32bis, v34\n"), CFG_OK);
     CHECK_EQ_I(c.modulations, CFG_MOD_V34 | CFG_MOD_V32BIS);
     CHECK(cfg_write(&c, 1, text, sizeof text) > 0);
@@ -81,7 +82,7 @@ static void test_port2(void)
 
     cfg_default(&c);
     CHECK(c.port2.ppp_peer == IP(10, 64, 64, 3));
-    CHECK_EQ_I(c.port2.modulations, CFG_MOD_ALL);
+    CHECK_EQ_I(c.port2.modulations, CFG_MOD_DEFAULT);
     CHECK_EQ_I(c.port2.max_down, 56000); CHECK_EQ_I(c.port2.max_up, 33600);
     CHECK_EQ_I(c.port2.tx_level, -12); CHECK_EQ_I(c.port2.v42, 1); CHECK_EQ_I(c.port2.v42bis, 1);
     CHECK_EQ_I(c.port2.v92, 1);
@@ -92,7 +93,7 @@ static void test_port2(void)
     CHECK_EQ_I(parse(&c, src), CFG_OK);
     CHECK_EQ_S(err, "");
     /* port 1 keeps its own */
-    CHECK_EQ_I(c.rings, 2); CHECK_EQ_S(c.line_number, "5551111"); CHECK_EQ_I(c.modulations, CFG_MOD_ALL);
+    CHECK_EQ_I(c.rings, 2); CHECK_EQ_S(c.line_number, "5551111"); CHECK_EQ_I(c.modulations, CFG_MOD_DEFAULT);
     CHECK(c.ppp_peer == IP(10, 64, 64, 2)); CHECK_EQ_I(c.law, CFG_LAW_ULAW);
     CHECK(c.port2.ppp_peer == IP(10, 64, 64, 9));
     CHECK_EQ_I(c.port2.rings, 3); CHECK_EQ_I(c.port2.modulations, CFG_MOD_V22BIS);
@@ -141,7 +142,7 @@ static void test_port2(void)
     CHECK_EQ_I(parse(&c, "[modem2]\nrings = 11\n"), CFG_ERR);
     CHECK_EQ_S(err, "t.conf:2: [modem2] rings: 11 is out of range 1..10");
     CHECK_EQ_I(parse(&c, "[modem2]\nmodulations = v90, v9\n"), CFG_ERR);
-    CHECK_EQ_S(err, "t.conf:2: [modem2] modulations: 'v9' is not one of: v90, v34, v32bis, v22bis, v22, v21");
+    CHECK_EQ_S(err, "t.conf:2: [modem2] modulations: 'v9' is not one of: v90, v34, v32bis, v22bis, v22, v21, v23");
     CHECK_EQ_I(parse(&c, "[modem2]\nv42 = off\n"), CFG_ERR);
     CHECK_EQ_S(err, "t.conf:2: [modem2] v42bis = on needs v42 = on (set v42bis = off)");
     CHECK_EQ_I(parse(&c, "[modem2]\nv92 = yes\n"), CFG_ERR);
@@ -195,7 +196,7 @@ static void test_defaults(void)
     CHECK_EQ_I(c.echo_interval, 30);
     CHECK_EQ_I(c.compression, 1);    /* PPP compression is offered unless switched off */
     CHECK_EQ_I(c.n_users, 0);
-    CHECK_EQ_I(c.modulations, CFG_MOD_ALL);
+    CHECK_EQ_I(c.modulations, CFG_MOD_DEFAULT);
     CHECK_EQ_I(c.max_down, 56000);
     CHECK_EQ_I(c.max_up, 33600);
     CHECK_EQ_I(c.tx_level, -12);
@@ -413,7 +414,7 @@ static const struct { const char *text; int line; const char *what; } bad[] = {
     { "[log]\nlevel = trace\n", 2, "level: 'trace' is not one of: error, warn, info, debug" },
     { "[log]\nlevel = Info\n", 2, "is not one of" },
     /* modulation list */
-    { "[modem]\nmodulations = v90, v32\n", 2, "modulations: 'v32' is not one of: v90, v34, v32bis, v22bis, v22, v21" },
+    { "[modem]\nmodulations = v90, v32\n", 2, "modulations: 'v32' is not one of: v90, v34, v32bis, v22bis, v22, v21, v23" },
     { "[modem]\nmodulations = v34, v21, v34\n", 2, "modulations: 'v34' is listed twice" },
     { "[modem]\nmodulations = v90, v21, v90\n", 2, "modulations: 'v90' is listed twice" },
     { "[modem]\nmodulations = v90,,v21\n", 2, "modulations: empty list item" },
@@ -633,7 +634,7 @@ static void test_validate_struct(void)
     CHECK_EQ_I(cfg_validate(&c, err, sizeof err), CFG_ERR);
     CHECK(strstr(err, "modulations") != NULL);
     cfg_default(&c);
-    c.modulations = 64;
+    c.modulations = 128;
     CHECK_EQ_I(cfg_validate(&c, err, sizeof err), CFG_ERR);
     cfg_default(&c);
     c.auth = 3;

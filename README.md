@@ -19,7 +19,7 @@ the stock firmware stays in the box, one click away.
 ## What it does
 
 - Answers a modem on either phone port: V.92, V.90, V.34, V.32bis, V.22bis,
-  V.22, V.21, Bell 212A and Bell 103, with V.42 error correction and V.42bis / V.44
+  V.22, V.21, Bell 212A and Bell 103 (and V.23, off by default), with V.42 error correction and V.42bis / V.44
   compression.
 - Can also offer the two pre-V.90 56k schemes to a modem that speaks one:
   x2 (U.S. Robotics, 1997) and K56flex (1996, experimental). Both are

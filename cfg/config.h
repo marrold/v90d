@@ -56,7 +56,9 @@
  *   [modem]
  *   modulations = v90, v34, v32bis, v22bis, v22, v21
  *                             comma separated, no repeats; v32bis
- *                             covers V.32 as well
+ *                             covers V.32 as well. v23 is also accepted but
+ *                             left out of the default list: it has not been
+ *                             tried against a real modem yet
  *   max_downstream = 56000    bit/s, 300..56000
  *   max_upstream = 33600      bit/s, 300..48000; more than 33600 is only
  *                             reached with V.92 (v92 = on)
@@ -179,8 +181,11 @@
 #define CFG_MOD_V22BIS  8u
 #define CFG_MOD_V22    16u
 #define CFG_MOD_V21    32u
-#define CFG_MOD_ALL    63u
-#define CFG_MOD_COUNT   6
+#define CFG_MOD_V23    64u    /* 1200/75 bit/s asymmetric FSK; simulation and own
+                                  answerer only so far, so left out of CFG_MOD_DEFAULT */
+#define CFG_MOD_ALL   127u     /* every known bit, for validation */
+#define CFG_MOD_DEFAULT (CFG_MOD_ALL & ~CFG_MOD_V23)  /* a fresh config's modulations */
+#define CFG_MOD_COUNT   7
 
 enum { CFG_AUTH_NONE = 0, CFG_AUTH_PAP = 1, CFG_AUTH_CHAP = 2 }; /* = PPP_AUTH_* */
 enum { CFG_LAW_ULAW = 0, CFG_LAW_ALAW = 1 };

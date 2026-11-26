@@ -12,7 +12,7 @@
 
 enum {
     F_NUMBER, F_TONES, F_RINGS, F_BUSY, F_DROP, F_SESSION, F_IDLE, F_AUTH,
-    F_MODS, F_V90, F_V34, F_V32BIS, F_V22BIS, F_V22, F_V21, F_DOWN, F_UP, F_ADMINPW, F_ADMINCLR,
+    F_MODS, F_V90, F_V34, F_V32BIS, F_V22BIS, F_V22, F_V21, F_V23, F_DOWN, F_UP, F_ADMINPW, F_ADMINCLR,
     F_LAN, F_ADDRESS, F_NETMASK, F_GATEWAY, F_DNS1, F_DNS2, F_PORT, F_SERVICE, F_V92, F_COMPRESSION,
     F_ENCRYPTION,
     F_DCNOW, F_DCLAN, F_DCUPNP, F_DCIWANGO, F_SATMATCH, F_UPDATE_CHECK, F_X2, F_K56,
@@ -32,7 +32,7 @@ static const struct { const char *name; const char *sec; } fields[F_COUNT] = {
     { "auth", "ppp" },
     { "mods", "modem" }, { "mod_v90", "modem" }, { "mod_v34", "modem" }, { "mod_v32bis", "modem" },
     { "mod_v22bis", "modem" }, { "mod_v22", "modem" },
-    { "mod_v21", "modem" }, { "max_downstream", "modem" }, { "max_upstream", "modem" },
+    { "mod_v21", "modem" }, { "mod_v23", "modem" }, { "max_downstream", "modem" }, { "max_upstream", "modem" },
     { "admin_password", "status" }, { "admin_clear", "status" },
     { "lan", "network" }, { "address", "network" }, { "netmask", "network" },
     { "gateway", "network" }, { "dns1", "network" }, { "dns2", "network" },
@@ -72,7 +72,7 @@ static const char *const t_comp[]  = { "Off: no PPP compression",
                                        "On: Deflate or MPPC, whichever the caller asks for" };
 static const char *const t_enc[]   = { "Off: no encryption required",
                                        "On: require 128-bit MPPE (forces MS-CHAPv2; a user is needed, and plain compression is dropped)" };
-static const char *const t_mods[]  = { "V.90", "V.34", "V.32bis", "V.22bis", "V.22", "V.21" };     /* bit i */
+static const char *const t_mods[]  = { "V.90", "V.34", "V.32bis", "V.22bis", "V.22", "V.21", "V.23" };     /* bit i */
 static const char *const n_svcmode[] = { "raw", "telnet" };        /* CFG_SVC_* */
 static const char *const t_svcnet[] = { "Off: only the numbers above",
                                         "On: also Netstalgia's numbers, fetched once a day" };

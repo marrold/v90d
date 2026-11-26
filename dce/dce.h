@@ -39,9 +39,10 @@
  * everything V.42 delivers is consumed at once by PPP and the ip_rx
  * callback, so LAPM never has to hold the far end off.
  *
- * On a V.21 call (300 bit/s FSK) there is no error control: V.42 does not
- * apply to it and the modem hands characters, not a bit-transparent stream.
- * The V.42 endpoint is then put straight into its start-stop mode.
+ * On a V.21 call (300 bit/s FSK; Bell 103 and V.23 likewise) there is no
+ * error control: V.42 does not apply to it and the modem hands characters,
+ * not a bit-transparent stream. The V.42 endpoint is then put straight into
+ * its start-stop mode.
  *
  * Portable C99, integer only, no allocation, no globals, not reentrant per
  * object. The modem and the V.42 endpoint (libv90modem) live in the dce_t's
@@ -126,7 +127,7 @@ typedef struct {
      * first (chat's CR after CONNECT) goes to PPP with its first frame. */
     int      ppp_detect;
     /* bench: the box calls (the modem on the port was told ATA): the
-     * modem in the calling role (V.34, V.32bis, V.22bis, V.22, V.21 so far) and V.42
+     * modem in the calling role (V.34, V.32bis, V.22bis, V.22, V.21, V.23 so far) and V.42
      * as the originator */
     int      originate;
     /* closing sequence limits, ms; 0 = the defaults in brackets */

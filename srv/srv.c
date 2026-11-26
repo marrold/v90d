@@ -295,6 +295,8 @@ static void call_start(srv_t *s)
     if (c->modulations & (CFG_MOD_V22BIS | CFG_MOD_V22)) d.modulations |= V90M_MOD_V22 | V90M_MOD_BELL212A;
     /* 300 bit/s: V.21 and, for a caller that turns out to be one, Bell 103 */
     if (c->modulations & CFG_MOD_V21) d.modulations |= V90M_MOD_V21 | V90M_MOD_BELL103;
+    /* 1200/75 bit/s asymmetric FSK; simulation and own answerer only so far */
+    if (c->modulations & CFG_MOD_V23) d.modulations |= V90M_MOD_V23;
     /* x2 (U.S. Robotics' 56k of 1997) and K56flex (the 1996 56k, experimental):
      * each offered alongside V.34 when the owner turned it on for this line.
      * The library needs V.34 with either (without it V90M_ENOTSUP), offers
@@ -321,14 +323,14 @@ static void call_start(srv_t *s)
     if (s->originate) {
         /* what the calling side can do so far */
         d.originate = 1;
-        d.modulations &= V90M_MOD_V34 | V90M_MOD_V32BIS | V90M_MOD_V22 | V90M_MOD_V21;
+        d.modulations &= V90M_MOD_V34 | V90M_MOD_V32BIS | V90M_MOD_V22 | V90M_MOD_V21 | V90M_MOD_V23;
     }
     if (!c->v42) { d.v42.detect = 1; d.v42.fallback = 1; d.v42.t400_ms = 1; }  /* straight to start-stop */
     if (acts) {
         /* ACTS's terms: up to 9600 bit/s and on (V.32bis here; no V.34 or
          * V.90, whose delay wanders more), 8N1 with no error control or
          * compression, so that an octet's time is its time on the line */
-        uint32_t m = d.modulations & (V90M_MOD_V32BIS | V90M_MOD_V22 | V90M_MOD_BELL212A | V90M_MOD_V21 | V90M_MOD_BELL103);
+        uint32_t m = d.modulations & (V90M_MOD_V32BIS | V90M_MOD_V22 | V90M_MOD_BELL212A | V90M_MOD_V21 | V90M_MOD_BELL103 | V90M_MOD_V23);
         d.modulations = m ? m : d.modulations & V90M_MOD_V34;   /* the owner left only fast ones on */
         d.v42.detect = 1; d.v42.fallback = 1; d.v42.t400_ms = 1;
         d.v42.lapm.v42bis_tx = 0; d.v42.lapm.v42bis_rx = 0; d.v42.lapm.v44_tx = 0; d.v42.lapm.v44_rx = 0;
@@ -404,6 +406,7 @@ static st_mod_t mod_of(int m)
     case V90M_CONN_V21: return ST_MOD_V21;
     case V90M_CONN_BELL103: return ST_MOD_BELL103;
     case V90M_CONN_BELL212A: return ST_MOD_BELL212A;
+    case V90M_CONN_V23: return ST_MOD_V23;
     default: return ST_MOD_NONE;
     }
 }

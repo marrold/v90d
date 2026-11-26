@@ -14,11 +14,17 @@ top=$(dirname "$fw")
 TC=armv5-eabi--uclibc--stable-2023.08-1
 KVER=6.6.63
 BB=busybox-1.36.1
-# the modem: libv90modem, pinned to a released source tarball (a GitHub
-# release asset, so its bytes do not change under us). Bump both lines to
-# move to a new modem; libv90m.mk builds whatever is unpacked at $top/libv90modem.
-LIBV90M_VER=0.6.1
-LIBV90M_SHA=e7b3fb850c8f5aeaf19ca2105c5d7b2f4d24a164ca3e8f869ba829fa968d796e
+# the modem: libv90modem, pinned to a source tarball (its bytes do not
+# change under us: a GitHub release asset, or for a pre-release RC not yet
+# merged upstream, GitHub's own tag source archive). Bump both lines, and
+# the URL below if moving between a georgica release and a marrold RC, to
+# move to a new modem; libv90m.mk builds whatever is unpacked at
+# $top/libv90modem.
+# 0.6.2-rc1: V.23 (V90M_MOD_V23), on marrold's fork pending an upstream
+# georgica release; move to a georgica v0.6.2 tag (and its release-asset
+# URL below) once one is cut.
+LIBV90M_VER=0.6.2-rc1
+LIBV90M_SHA=01a5ad4e632089fc17553725b36a4aa41bafdf584b7c3d62e64036c5fdfc34cc
 
 get() { # get URL FILE SHA256
     mkdir -p "$(dirname "$2")"
@@ -39,7 +45,7 @@ get https://swupdate.openvpn.org/community/releases/openvpn-2.6.12.tar.gz \
     "$fw/dl/openvpn-2.6.12.tar.gz" 1c610fddeb686e34f1367c347e027e418e07523a10f4d8ce4a2c2af2f61a1929
 get https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-2.28.9/mbedtls-2.28.9.tar.bz2 \
     "$fw/dl/mbedtls-2.28.9.tar.bz2" e85ea97aaf78dd6c0a5ba2e54dd5932ffa15f39abfc189c26beef7684630c02b
-get https://github.com/georgica/libv90modem/releases/download/v$LIBV90M_VER/libv90modem-$LIBV90M_VER.tar.gz \
+get https://github.com/marrold/libv90modem/archive/refs/tags/v$LIBV90M_VER.tar.gz \
     "$fw/dl/libv90modem-$LIBV90M_VER.tar.gz" $LIBV90M_SHA
 
 [ -x "$top/toolchain/$TC/bin/arm-linux-gcc" ] || { echo "unpacking the toolchain"; tar -C "$top/toolchain" -xjf "$top/toolchain/$TC.tar.bz2"; "$top/toolchain/$TC/relocate-sdk.sh" >/dev/null; }

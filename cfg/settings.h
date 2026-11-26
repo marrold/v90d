@@ -22,9 +22,9 @@
  *   auth              none | pap | chap
  *   user0 .. user15   user names, empty = row not used
  *   pass0 .. pass15   their passwords, see below
- *   mods              1: the six mod_ fields below are a complete set of
+ *   mods              1: the seven mod_ fields below are a complete set of
  *                     checkboxes, one that is missing means off
- *   mod_v90, mod_v34, mod_v32bis, mod_v22bis, mod_v22, mod_v21
+ *   mod_v90, mod_v34, mod_v32bis, mod_v22bis, mod_v22, mod_v21, mod_v23
  *                     1 = on, 0 = off
  *   max_downstream    300..56000
  *   max_upstream      300..48000 (above 33600: V.92 only)
